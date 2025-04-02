@@ -1,0 +1,38 @@
+# Node.js dependencies
+node_modules
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+
+# Database credentials or sensitive files
+*.env
+*.key
+*.pem
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE-specific files
+.vscode/
+.idea/
+*.swp
+
+# Build files
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Git-specific files
+.git/
