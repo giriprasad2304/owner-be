@@ -4,14 +4,14 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3005; // Use environment PORT for Render
+const PORT = process.env.PORT || 3005;
 
-// CORS configuration
+// CORS configuration (Allow frontend URL from .env)
 app.use(cors({
-    origin: 'https://giriprasad2304.github.io', // Allow your GitHub Pages domain
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed methods
-    allowedHeaders: ['Content-Type'], // Allowed headers
-    credentials: true // If you need to send cookies or auth headers
+    origin: process.env.CLIENT_URL || 'https://giriprasad2304.github.io',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true
 }));
 
 // Middleware
@@ -20,26 +20,23 @@ app.use(express.json());
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI;
 
-mongoose.connect(MONGODB_URI, { 
-    useNewUrlParser: true, 
-    useUnifiedTopology: true 
-})
-    .then(() => console.log('Connected to MongoDB'))
-    .catch(err => console.error('MongoDB connection error:', err));
+mongoose.connect(MONGODB_URI)
+    .then(() => console.log('✅ Connected to MongoDB'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Order schema and model
+// Order Schema and Model
 const orderSchema = new mongoose.Schema({
     consumer: String,
-    flavour: String,    // Added missing fields from frontend
+    flavour: String,
     quantity: Number,
-    phone: String,      // Added missing fields from frontend
-    info: String,       // Added missing fields from frontend
+    phone: String,
+    info: String,
     date: { type: Date, default: Date.now }
 });
 
 const Order = mongoose.model('Order', orderSchema);
 
-// Menu schema and model
+// Menu Schema and Model
 const menuSchema = new mongoose.Schema({
     category: String,
     items: [{
@@ -52,63 +49,74 @@ const menuSchema = new mongoose.Schema({
 
 const Menu = mongoose.model('Menu', menuSchema);
 
-// Test route
+// ✅ Test API
 app.get('/api/test', (req, res) => {
-    res.send('API is working!');
+    res.send('✅ API is working!');
 });
 
-// NEW ORDER ENDPOINT - This is what your frontend is calling
+// ✅ Place New Order
 app.post('/order', async (req, res) => {
     try {
         const { consumer, flavour, quantity, phone, info } = req.body;
-        
-        // Basic validation
+
         if (!consumer || !flavour || !quantity || !phone) {
-            return res.status(400).json({ 
-                message: 'Missing required fields' 
-            });
+            return res.status(400).json({ message: '⚠️ Missing required fields' });
         }
 
-        const newOrder = new Order({
-            consumer,
-            flavour,
-            quantity,
-            phone,
-            info
-        });
-
+        const newOrder = new Order({ consumer, flavour, quantity, phone, info });
         await newOrder.save();
-        res.status(201).json({ 
-            message: 'Order placed successfully',
-            order: newOrder 
-        });
+
+        res.status(201).json({ message: '✅ Order placed successfully', order: newOrder });
     } catch (error) {
-        console.error('Error placing order:', error);
-        res.status(500).json({ 
-            message: 'Failed to place order',
-            error: error.message 
-        });
+        console.error('❌ Error placing order:', error);
+        res.status(500).json({ message: 'Failed to place order', error: error.message });
     }
 });
 
-// Existing endpoints...
+// ✅ Get All Orders
 app.get('/api/orders', async (req, res) => {
     try {
         const orders = await Order.find();
         res.json(orders);
     } catch (err) {
-        console.error('Error fetching orders:', err);
+        console.error('❌ Error fetching orders:', err);
         res.status(500).json({ error: 'Failed to fetch orders' });
     }
 });
 
-// ... [rest of your existing endpoints remain the same]
+// ✅ DELETE Order (Fix for Mark as Delivered)
+app.delete('/order/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-}).on('error', (err) => {
-    console.error('Failed to start server:', err);
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: '⚠️ Invalid order ID' });
+        }
+
+        const deletedOrder = await Order.findByIdAndDelete(id);
+
+        if (!deletedOrder) {
+            return res.status(404).json({ message: '⚠️ Order not found' });
+        }
+
+        res.json({ message: '✅ Order marked as delivered and deleted', order: deletedOrder });
+    } catch (error) {
+        console.error('❌ Error deleting order:', error);
+        res.status(500).json({ message: 'Failed to delete order', error: error.message });
+    }
 });
 
-// Your other endpoints (delete, update, etc.) remain unchanged
+// ✅ Graceful Shutdown - Close MongoDB Connection on Server Stop
+process.on('SIGINT', async () => {
+    await mongoose.connection.close();
+    console.log('❌ MongoDB connection closed.');
+    process.exit(0);
+});
+
+// ✅ Start Server
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+}).on('error', (err) => {
+    console.error('❌ Failed to start server:', err);
+});
+s
