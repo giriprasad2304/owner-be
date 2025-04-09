@@ -1,122 +1,134 @@
-require('dotenv').config();
+require('dotenv').config(); 
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3005;
-
-// CORS configuration (Allow frontend URL from .env)
-app.use(cors({
-    origin: process.env.CLIENT_URL || 'https://giriprasad2304.github.io',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-    credentials: true
-}));
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI;
+const PORT = process.env.PORT || 3005;
 
-mongoose.connect(MONGODB_URI)
-    .then(() => console.log('✅ Connected to MongoDB'))
-    .catch(err => console.error('❌ MongoDB connection error:', err));
+mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(err => console.error('MongoDB connection error:', err));
 
-// Order Schema and Model
+// Order schema and model
 const orderSchema = new mongoose.Schema({
-    consumer: String,
-    flavour: String,
+    consumer: String, // Name of the consumer
     quantity: Number,
-    phone: String,
-    info: String,
     date: { type: Date, default: Date.now }
 });
 
 const Order = mongoose.model('Order', orderSchema);
 
-// Menu Schema and Model
+// Define the menuSchema
 const menuSchema = new mongoose.Schema({
     category: String,
-    items: [{
-        name: String,
-        price: String,
-        image: String,
-        quantity: Number
-    }]
+    items: [
+        {
+            name: String,
+            price: String,
+            image: String,
+            quantity: Number
+        }
+    ]
 });
 
+// Create the Menu model
 const Menu = mongoose.model('Menu', menuSchema);
 
-// ✅ Test API
+// Test route
 app.get('/api/test', (req, res) => {
-    res.send('✅ API is working!');
+    res.send('API is working!');
 });
 
-// ✅ Place New Order
-app.post('/order', async (req, res) => {
-    try {
-        const { consumer, flavour, quantity, phone, info } = req.body;
-
-        if (!consumer || !flavour || !quantity || !phone) {
-            return res.status(400).json({ message: '⚠️ Missing required fields' });
-        }
-
-        const newOrder = new Order({ consumer, flavour, quantity, phone, info });
-        await newOrder.save();
-
-        res.status(201).json({ message: '✅ Order placed successfully', order: newOrder });
-    } catch (error) {
-        console.error('❌ Error placing order:', error);
-        res.status(500).json({ message: 'Failed to place order', error: error.message });
-    }
-});
-
-// ✅ Get All Orders
+// API endpoint to fetch orders
 app.get('/api/orders', async (req, res) => {
     try {
         const orders = await Order.find();
+        console.log('Orders fetched:', orders); // Debugging log
         res.json(orders);
     } catch (err) {
-        console.error('❌ Error fetching orders:', err);
+        console.error('Error fetching orders:', err);
         res.status(500).json({ error: 'Failed to fetch orders' });
     }
 });
 
-// ✅ DELETE Order (Fix for Mark as Delivered)
-app.delete('/order/:id', async (req, res) => {
+// API endpoint to delete an order by phone number
+app.delete('/api/orders', async (req, res) => {
     try {
-        const { id } = req.params;
+        const { phone } = req.body; // Expect phone number in the request body
+        const order = await Order.findOneAndDelete({ phone });
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ message: '⚠️ Invalid order ID' });
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found or incorrect phone number' });
         }
 
-        const deletedOrder = await Order.findByIdAndDelete(id);
-
-        if (!deletedOrder) {
-            return res.status(404).json({ message: '⚠️ Order not found' });
-        }
-
-        res.json({ message: '✅ Order marked as delivered and deleted', order: deletedOrder });
-    } catch (error) {
-        console.error('❌ Error deleting order:', error);
-        res.status(500).json({ message: 'Failed to delete order', error: error.message });
+        res.json({ message: 'Order deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting order:', err);
+        res.status(500).json({ error: 'Failed to delete order' });
     }
 });
 
-// ✅ Graceful Shutdown - Close MongoDB Connection on Server Stop
-process.on('SIGINT', async () => {
-    await mongoose.connection.close();
-    console.log('❌ MongoDB connection closed.');
-    process.exit(0);
+// Endpoint to update the quantity of a specific item
+app.put('/api/menu/update-quantity', async (req, res) => {
+    const { category, itemName, newQuantity } = req.body;
+
+    try {
+        const menu = await Menu.findOneAndUpdate(
+            { category, "items.name": itemName }, // Find the category and item by name
+            { $set: { "items.$.quantity": newQuantity } }, // Update the quantity of the matched item
+            { new: true } // Return the updated document
+        );
+
+        if (!menu) {
+            return res.status(404).json({ error: 'Item not found' });
+        }
+        res.json({ message: 'Quantity updated successfully', menu });
+    } catch (error) {
+        console.error('Error updating quantity:', error);
+        res.status(500).json({ error: 'Failed to update quantity' });
+    }
 });
 
-// ✅ Start Server
+// Endpoint to fetch categories and items
+app.get('/api/menu/categories', async (req, res) => {
+    try {
+        const categories = await Menu.find({}, 'category items.name'); // Fetch categories and item names
+        console.log('Categories fetched:', categories); // Debugging log
+        res.json(categories);
+    } catch (error) {
+        console.error('Error fetching categories:', error);
+        res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+});
+
+// Start the server
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`Server is running on http://localhost:${PORT}`);
 }).on('error', (err) => {
-    console.error('❌ Failed to start server:', err);
+    console.error('Failed to start server:', err);
 });
 
+app.post('/api/menu/add-item', async (req, res) => {
+    const { category, name, price, image, quantity } = req.body;
+
+    try {
+        const menu = await Menu.findOneAndUpdate(
+            { category }, // Find the category
+            { $push: { items: { name, price, image, quantity } } }, // Add the new item to the items array
+            { new: true, upsert: true } // Create the category if it doesn't exist
+        );
+
+        res.json({ message: 'Item added successfully', menu });
+    } catch (error) {
+        console.error('Error adding item:', error);
+        res.status(500).json({ error: 'Failed to add item' });
+    }
+});
